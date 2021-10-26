@@ -17,126 +17,28 @@
 
 package org.apache.ignite.yardstick.cache;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.ignite.IgniteCache;
-import org.apache.ignite.IgniteLogger;
-import org.apache.ignite.cache.affinity.Affinity;
-import org.apache.ignite.cluster.ClusterNode;
-import org.apache.ignite.internal.util.typedef.internal.U;
-import org.yardstickframework.BenchmarkConfiguration;
 
-import java.util.*;
-
-/** Ignite benchmark that performs putAll operations. */
+/**
+ * Ignite benchmark that performs put operations.
+ */
 public class IgnitePutAllHeavyDataBenchmark extends IgniteCacheAbstractBenchmark<Integer, Object> {
-    /** */
-    private static final Integer PUT_MAPS_KEY = 2048;
-
-    /** */
-    private static final Integer PUT_MAPS_CNT = 256;
-
-    /** Affinity mapper. */
-    private Affinity<Integer> aff;
-
-    /** */
-    private int srvrCnt;
-
-    /** */
-    private int stripesCnt;
-
     /** {@inheritDoc} */
-    @Override
-    public void setUp(BenchmarkConfiguration cfg) throws Exception {
-        super.setUp(cfg);
+    @Override public boolean test(Map<Object, Object> ctx) throws Exception {
+        Map<Integer, Integer> vals = new HashMap<>();
 
-        aff = ignite().affinity(cache().getName());
+        for (int i = 0; i < 500; i++ )
+            vals.put(i, nextRandom(1000));
 
-        Collection<ClusterNode> nodes = ignite().cluster().forServers().nodes();
-
-        stripesCnt = ignite().cluster().forServers().forRandom().metrics().getTotalCpus();
-
-        srvrCnt = nodes.size();
-
-        IgniteLogger log = ignite().log();
-
-        if (log.isInfoEnabled())
-            log.info("Servers info [srvrsCnt=" + srvrCnt + ", stripesCnt=" + stripesCnt + ']');
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean test(Map<Object, Object> ctx) throws Exception {
-        List<Map<UUID, byte[]>> putMaps = (List<Map<UUID, byte[]>>) ctx.get(PUT_MAPS_KEY);
-
-        if (putMaps == null) {
-            putMaps = new ArrayList<>(PUT_MAPS_CNT);
-
-            ctx.put(PUT_MAPS_KEY, putMaps);
-        }
-
-        Map<UUID, byte[]> vals;
-
-        if (putMaps.size() == PUT_MAPS_CNT)
-            vals = putMaps.get(nextRandom(PUT_MAPS_CNT));
-        else {
-            vals = new TreeMap<>();
-
-            ClusterNode node = args.collocated() ? aff.mapKeyToNode(nextRandom(args.range())) : null;
-
-            Map<ClusterNode, Integer> stripesMap = null;
-
-            if (args.singleStripe())
-                stripesMap = U.newHashMap(srvrCnt);
-
-            for (; vals.size() < args.batch(); ) {
-                int key = nextRandom(args.range());
-
-                if (args.collocated() && !aff.isPrimary(
-                        node,
-                        key))
-                    continue;
-
-                if (args.singleStripe()) {
-                    int part = aff.partition(key);
-
-                    ClusterNode node0 = node != null ? node : aff.mapPartitionToNode(part);
-
-                    Integer stripe0 = stripesMap.get(node0);
-                    int stripe = part % stripesCnt;
-
-                    if (stripe0 != null) {
-                        if (stripe0 != stripe)
-                            continue;
-                    } else
-                        stripesMap.put(
-                                node0,
-                                stripe);
-                }
-
-                vals.put(
-                        UUID.randomUUID(),
-                        new byte[15_1000]);
-            }
-
-            putMaps.add(vals);
-
-            if (putMaps.size() == PUT_MAPS_CNT) {
-                IgniteLogger log = ignite().log();
-
-                if (log.isInfoEnabled())
-                    log.info("Put maps set generated.");
-            }
-        }
-
-        IgniteCache<Integer, Object> cache = cacheForOperation();
-
-        cache.putAll(vals);
+        cache().putAll(vals);
 
         return true;
     }
 
     /** {@inheritDoc} */
-    @Override
-    protected IgniteCache<Integer, Object> cache() {
+    @Override protected IgniteCache<Integer, Object> cache() {
         return ignite().cache("atomic");
     }
 }
