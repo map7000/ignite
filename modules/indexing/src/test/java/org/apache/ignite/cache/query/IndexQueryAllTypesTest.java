@@ -38,6 +38,7 @@ import java.util.stream.LongStream;
 import javax.cache.Cache;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
+import org.apache.ignite.cache.CacheAtomicityMode;
 import org.apache.ignite.cache.query.annotations.QuerySqlField;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
@@ -92,6 +93,7 @@ public class IndexQueryAllTypesTest extends GridCommonAbstractTest {
 
         CacheConfiguration<Long, Person> ccfg = new CacheConfiguration<Long, Person>()
             .setName(CACHE)
+            .setAtomicityMode(CacheAtomicityMode.TRANSACTIONAL)
             .setIndexedTypes(Long.class, Person.class);
 
         cfg.setCacheConfiguration(ccfg);
@@ -114,8 +116,13 @@ public class IndexQueryAllTypesTest extends GridCommonAbstractTest {
 
         String intNullIdx = idxName("intNullId");
 
+        // Should include all.
+        IndexQuery<Long, Person> qry = new IndexQuery<>(Person.class, intNullIdx);
+
+        check(cache.query(qry), 0, CNT, i -> i, persGen);
+
         // Should include nulls.
-        IndexQuery<Long, Person> qry = new IndexQuery<Long, Person>(Person.class, intNullIdx)
+        qry = new IndexQuery<Long, Person>(Person.class, intNullIdx)
             .setCriteria(lt("intNullId", pivot));
 
         check(cache.query(qry), 0, CNT / 5, i -> i, persGen);
@@ -260,8 +267,13 @@ public class IndexQueryAllTypesTest extends GridCommonAbstractTest {
 
         String boolIdx = idxName("boolId");
 
+        IndexQuery<Long, Person> qry = new IndexQuery<>(Person.class, boolIdx);
+
+        // All.
+        check(cache.query(qry), 0, CNT, valGen, persGen);
+
         // Lt.
-        IndexQuery<Long, Person> qry = new IndexQuery<Long, Person>(Person.class, boolIdx)
+        qry = new IndexQuery<Long, Person>(Person.class, boolIdx)
             .setCriteria(lt("boolId", true));
 
         check(cache.query(qry), CNT / 2 + 1, CNT, valGen, persGen);
@@ -300,8 +312,13 @@ public class IndexQueryAllTypesTest extends GridCommonAbstractTest {
 
         T val = valGen.apply(pivot);
 
+        // All.
+        IndexQuery<Long, Person> qry = new IndexQuery<>(Person.class, idxName(fieldName));
+
+        check(cache.query(qry), 0, cnt, valGen, persGen);
+
         // Lt.
-        IndexQuery<Long, Person> qry = new IndexQuery<Long, Person>(Person.class, idxName(fieldName))
+        qry = new IndexQuery<Long, Person>(Person.class, idxName(fieldName))
             .setCriteria(lt(fieldName, val));
 
         check(cache.query(qry), 0, pivot, valGen, persGen);
